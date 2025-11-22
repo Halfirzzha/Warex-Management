@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Auth\RequestPasswordReset;
-use App\Filament\Pages\Auth\ResetPassword;
 use App\Http\Middleware\CheckAccountStatus;
 use App\Http\Middleware\SecurityHeaders;
 use Filament\Http\Middleware\Authenticate;
@@ -31,10 +30,17 @@ class WarehousePanelProvider extends PanelProvider
             ->default()
             ->id('warehouse')
             ->path('warehouse')
-            ->login(Login::class) // Use custom login page with enhanced security
-            ->passwordReset(RequestPasswordReset::class) // Forgot password request and reset
-            ->brandName('Warehouse Management')
+            ->login(Login::class)
+            ->passwordReset(RequestPasswordReset::class)
+
+            // ========== BRANDING ==========
+            ->brandName('Warex Management')
+            ->brandLogo(asset('images/logo.svg'))
+            ->darkModeBrandLogo(asset('images/logo-dark.svg'))
+            ->brandLogoHeight('2.5rem')
             ->favicon(asset('favicon.ico'))
+
+            // ========== COLORS ==========
             ->colors([
                 'primary' => Color::Indigo,
                 'danger' => Color::Red,
@@ -42,24 +48,37 @@ class WarehousePanelProvider extends PanelProvider
                 'success' => Color::Green,
                 'warning' => Color::Orange,
             ])
+
+            // ========== UI SETTINGS ==========
             ->font('Inter')
             ->maxContentWidth('full')
             ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth('16rem')
+            ->collapsedSidebarWidth('4rem')
+            ->topNavigation(false)
+
+            // ========== NAVIGATION GROUPS ==========
             ->navigationGroups([
                 'User Management',
                 'Warehouse',
                 'Reports',
                 'Settings',
             ])
+
+            // ========== RESOURCES & PAGES ==========
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
                 Pages\Dashboard::class,
             ])
+
+            // ========== WIDGETS ==========
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
             ])
+
+            // ========== MIDDLEWARE ==========
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -70,14 +89,18 @@ class WarehousePanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-                SecurityHeaders::class, // Add security headers to all responses
+                SecurityHeaders::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
-                CheckAccountStatus::class, // Check if account is blocked/suspended
+                CheckAccountStatus::class,
             ])
+
+            // ========== NOTIFICATIONS ==========
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
+
+            // ========== SPA MODE ==========
             ->spa();
     }
 }

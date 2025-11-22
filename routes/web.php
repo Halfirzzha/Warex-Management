@@ -8,12 +8,12 @@ use Illuminate\Support\Facades\Route;
  * ============================================================================
  */
 
-// Welcome page with security headers
+// Redirect to admin panel
 Route::get('/', function () {
-    return view('welcome');
+    return redirect('/warehouse');
 })->middleware([
     'throttle:60,1', // Max 60 requests per minute
-])->name('welcome');
+])->name('warehouse');
 
 /**
  * ============================================================================

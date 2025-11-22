@@ -51,9 +51,13 @@ class Login extends BaseLogin
         try {
             $this->rateLimit(5);
         } catch (TooManyRequestsException $exception) {
+            $seconds = method_exists($exception, 'secondsUntilAvailable')
+                ? $exception->secondsUntilAvailable
+                : 60;
+
             Notification::make()
                 ->title('Terlalu banyak percobaan login')
-                ->body('Silakan coba lagi dalam '.$exception->secondsUntilAvailable.' detik.')
+                ->body('Silakan coba lagi dalam '.$seconds.' detik.')
                 ->danger()
                 ->send();
 
@@ -160,7 +164,7 @@ class Login extends BaseLogin
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('email')
-            ->label('Email / Username')
+            ->label('Email | Username')
             ->required()
             ->autocomplete()
             ->autofocus()

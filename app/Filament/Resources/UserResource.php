@@ -35,279 +35,282 @@ class UserResource extends Resource
     {
         return $form
             ->schema([
-                // ========== SECTION 1: INFORMASI PROFIL (EDITABLE) ==========
-                Forms\Components\Section::make('Informasi Profil')
-                    ->description('Data pribadi dan identitas pengguna')
-                    ->icon('heroicon-o-user-circle')
-                    ->collapsible()
-                    ->columns(12)
-                    ->schema([
-                        // Avatar - 3 columns
-                        Forms\Components\FileUpload::make('avatar')
-                            ->label('Foto Profil')
-                            ->image()
-                            ->avatar()
-                            ->imageEditor()
-                            ->circleCropper()
-                            ->directory('avatars')
-                            ->visibility('public')
-                            ->maxSize(2048)
-                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/jpg'])
-                            ->columnSpan(3),
-
-                        // Profile Fields - 9 columns
-                        Forms\Components\Grid::make(1)
+                Forms\Components\Tabs::make('User Information')
+                    ->tabs([
+                        // ========== TAB 1: INFORMASI PROFIL ==========
+                        Forms\Components\Tabs\Tab::make('Profil')
+                            ->icon('heroicon-o-user-circle')
                             ->schema([
-                                Forms\Components\TextInput::make('name')
-                                    ->label('Nama Lengkap')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->placeholder('Masukkan nama lengkap')
-                                    ->prefixIcon('heroicon-o-user')
-                                    ->autocomplete('name'),
+                                Forms\Components\Grid::make(12)
+                                    ->schema([
+                                        // Avatar - 3 columns
+                                        Forms\Components\FileUpload::make('avatar')
+                                            ->label('Foto Profil')
+                                            ->image()
+                                            ->avatar()
+                                            ->imageEditor()
+                                            ->imageEditorAspectRatios(['1:1'])
+                                            ->imageCropAspectRatio('1:1')
+                                            ->imageResizeTargetWidth('800')
+                                            ->imageResizeTargetHeight('800')
+                                            ->directory('avatars/users')
+                                            ->visibility('public')
+                                            ->maxSize(5120)
+                                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])
+                                            ->downloadable()
+                                            ->openable()
+                                            ->previewable()
+                                            ->helperText('Upload & klik untuk crop. Max 5MB.')
+                                            ->columnSpan(3),
 
-                                Forms\Components\TextInput::make('username')
-                                    ->label('Username')
-                                    ->maxLength(255)
-                                    ->unique(ignoreRecord: true)
-                                    ->placeholder('Masukkan username unik')
-                                    ->prefixIcon('heroicon-o-at-symbol')
-                                    ->alphaDash()
-                                    ->autocomplete('username')
-                                    ->helperText('Hanya huruf, angka, dash (-) dan underscore (_)'),
+                                        // Profile Fields - 9 columns
+                                        Forms\Components\Grid::make(1)
+                                            ->schema([
+                                                Forms\Components\TextInput::make('name')
+                                                    ->label('Nama Lengkap')
+                                                    ->required()
+                                                    ->maxLength(255)
+                                                    ->placeholder('Masukkan nama lengkap')
+                                                    ->prefixIcon('heroicon-o-user')
+                                                    ->autocomplete('name'),
 
-                                Forms\Components\TextInput::make('position')
-                                    ->label('Jabatan')
-                                    ->maxLength(255)
-                                    ->placeholder('Contoh: Manager Warehouse, Staff Admin')
-                                    ->prefixIcon('heroicon-o-briefcase')
-                                    ->autocomplete('organization-title'),
-                            ])
-                            ->columnSpan(9),
-                    ]),
+                                                Forms\Components\TextInput::make('username')
+                                                    ->label('Username')
+                                                    ->maxLength(255)
+                                                    ->unique(ignoreRecord: true)
+                                                    ->placeholder('Masukkan username unik')
+                                                    ->prefixIcon('heroicon-o-at-symbol')
+                                                    ->alphaDash()
+                                                    ->autocomplete('username')
+                                                    ->helperText('Hanya huruf, angka, dash (-) dan underscore (_)'),
 
-                // ========== SECTION 2: INFORMASI AKUN (EDITABLE) ==========
-                Forms\Components\Section::make('Informasi Akun')
-                    ->description('Email dan password untuk akses sistem')
-                    ->icon('heroicon-o-key')
-                    ->collapsible()
-                    ->columns(2)
-                    ->schema([
-                        Forms\Components\TextInput::make('email')
-                            ->label('Email')
-                            ->email()
-                            ->required()
-                            ->unique(ignoreRecord: true)
-                            ->maxLength(255)
-                            ->placeholder('user@example.com')
-                            ->prefixIcon('heroicon-o-envelope')
-                            ->autocomplete('email')
-                            ->columnSpan(1),
+                                                Forms\Components\TextInput::make('position')
+                                                    ->label('Jabatan')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Contoh: Manager Warehouse, Staff Admin')
+                                                    ->prefixIcon('heroicon-o-briefcase')
+                                                    ->autocomplete('organization-title'),
+                                            ])
+                                            ->columnSpan(9),
+                                    ]),
+                            ]),
 
-                        Forms\Components\TextInput::make('password')
-                            ->label('Password')
-                            ->password()
-                            ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                            ->dehydrated(fn ($state) => filled($state))
-                            ->required(fn (string $context): bool => $context === 'create')
-                            ->maxLength(255)
-                            ->placeholder('Minimal 8 karakter')
-                            ->prefixIcon('heroicon-o-key')
-                            ->revealable()
-                            ->autocomplete('new-password')
-                            ->helperText(fn (string $context): string => $context === 'create'
-                                    ? 'Password harus minimal 8 karakter'
-                                    : 'Kosongkan jika tidak ingin mengubah password'
-                            )
-                            ->columnSpan(1),
-                    ]),
-
-                // ========== SECTION 3: STATUS & KEAMANAN (MIXED) ==========
-                Forms\Components\Section::make('Status & Keamanan')
-                    ->description('Pengaturan status akun dan keamanan')
-                    ->icon('heroicon-o-shield-check')
-                    ->collapsible()
-                    ->collapsed()
-                    ->columns(2)
-                    ->schema([
-                        // Editable Fields
-                        Forms\Components\Select::make('account_status')
-                            ->label('Status Akun')
-                            ->required()
-                            ->options([
-                                User::STATUS_ACTIVE => 'Aktif',
-                                User::STATUS_BLOCKED => 'Diblokir Sistem',
-                                User::STATUS_SUSPENDED => 'Dibekukan Admin',
-                                User::STATUS_TERMINATED => 'Dihentikan Admin',
-                            ])
-                            ->default(User::STATUS_ACTIVE)
-                            ->native(false)
-                            ->prefixIcon('heroicon-o-check-circle')
-                            ->searchable()
-                            ->columnSpan(1),
-
-                        Forms\Components\Select::make('created_by_type')
-                            ->label('Dibuat Oleh')
-                            ->options([
-                                User::CREATED_BY_SYSTEM => 'System',
-                                User::CREATED_BY_ADMIN => 'Admin',
-                            ])
-                            ->default(User::CREATED_BY_ADMIN)
-                            ->native(false)
-                            ->required()
-                            ->prefixIcon('heroicon-o-cog-6-tooth')
-                            ->columnSpan(1),
-
-                        Forms\Components\Select::make('blocked_by')
-                            ->label('Diblokir Oleh')
-                            ->relationship('blocker', 'name')
-                            ->searchable()
-                            ->preload()
-                            ->native(false)
-                            ->prefixIcon('heroicon-o-user')
-                            ->placeholder('Pilih user yang memblokir')
-                            ->columnSpan(1),
-
-                        Forms\Components\DateTimePicker::make('blocked_until')
-                            ->label('Blokir Sampai')
-                            ->prefixIcon('heroicon-o-calendar')
-                            ->displayFormat('d M Y H:i')
-                            ->native(false)
-                            ->seconds(false)
-                            ->helperText('Kosongkan untuk blokir permanen')
-                            ->columnSpan(1),
-
-                        Forms\Components\Textarea::make('blocked_reason')
-                            ->label('Alasan Pemblokiran')
-                            ->rows(3)
-                            ->placeholder('Masukkan alasan detail mengapa user diblokir...')
-                            ->maxLength(1000)
-                            ->columnSpanFull(),
-
-                        // Read-Only Fields with Visual Distinction
-                        Forms\Components\Group::make()
+                        // ========== TAB 2: INFORMASI AKUN ==========
+                        Forms\Components\Tabs\Tab::make('Akun')
+                            ->icon('heroicon-o-key')
+                            ->badge(fn (string $context): ?string => $context === 'create' ? 'Required' : null)
                             ->schema([
-                                Forms\Components\Placeholder::make('security_info')
-                                    ->label('Informasi Keamanan (Read-Only)')
-                                    ->content('')
-                                    ->columnSpanFull(),
-                            ])
-                            ->columnSpanFull(),
+                                Forms\Components\Grid::make(2)
+                                    ->schema([
+                                        Forms\Components\TextInput::make('email')
+                                            ->label('Email')
+                                            ->email()
+                                            ->required()
+                                            ->unique(ignoreRecord: true)
+                                            ->maxLength(255)
+                                            ->placeholder('user@example.com')
+                                            ->prefixIcon('heroicon-o-envelope')
+                                            ->autocomplete('email')
+                                            ->columnSpan(1),
 
-                        Forms\Components\TextInput::make('failed_login_attempts')
-                            ->label('Percobaan Login Gagal')
-                            ->numeric()
-                            ->default(0)
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->prefixIcon('heroicon-o-exclamation-triangle')
-                            ->suffix('kali')
-                            ->helperText('Akan direset otomatis setelah login berhasil')
-                            ->extraInputAttributes(['class' => 'bg-gray-50 dark:bg-gray-800'])
-                            ->columnSpan(1),
+                                        Forms\Components\TextInput::make('password')
+                                            ->label('Password')
+                                            ->password()
+                                            ->dehydrateStateUsing(fn ($state) => Hash::make($state))
+                                            ->dehydrated(fn ($state) => filled($state))
+                                            ->required(fn (string $context): bool => $context === 'create')
+                                            ->maxLength(255)
+                                            ->placeholder('Minimal 8 karakter')
+                                            ->prefixIcon('heroicon-o-key')
+                                            ->revealable()
+                                            ->autocomplete('new-password')
+                                            ->helperText(fn (string $context): string => $context === 'create'
+                                                    ? 'Password harus minimal 8 karakter'
+                                                    : 'Kosongkan jika tidak ingin mengubah password'
+                                            )
+                                            ->columnSpan(1),
+                                    ]),
+                            ]),
 
-                        Forms\Components\DateTimePicker::make('locked_at')
-                            ->label('Waktu Dikunci')
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->prefixIcon('heroicon-o-lock-closed')
-                            ->displayFormat('d M Y H:i:s')
-                            ->native(false)
-                            ->helperText('Otomatis dikunci setelah 5x gagal login')
-                            ->extraInputAttributes(['class' => 'bg-gray-50 dark:bg-gray-800'])
-                            ->columnSpan(1),
-                    ]),
+                        // ========== TAB 3: STATUS & KEAMANAN ==========
+                        Forms\Components\Tabs\Tab::make('Keamanan')
+                            ->icon('heroicon-o-shield-check')
+                            ->schema([
+                                Forms\Components\Grid::make(2)
+                                    ->schema([
+                                        Forms\Components\Select::make('account_status')
+                                            ->label('Status Akun')
+                                            ->required()
+                                            ->options([
+                                                User::STATUS_ACTIVE => 'Aktif',
+                                                User::STATUS_BLOCKED => 'Diblokir Sistem',
+                                                User::STATUS_SUSPENDED => 'Dibekukan Admin',
+                                                User::STATUS_TERMINATED => 'Dihentikan Admin',
+                                            ])
+                                            ->default(User::STATUS_ACTIVE)
+                                            ->native(false)
+                                            ->prefixIcon('heroicon-o-check-circle')
+                                            ->searchable()
+                                            ->columnSpan(1),
 
-                // ========== SECTION 4: INFORMASI AKTIVITAS (READ-ONLY) ==========
-                Forms\Components\Section::make('Informasi Aktivitas')
-                    ->description('Data login dan aktivitas pengguna (Read-Only)')
-                    ->icon('heroicon-o-chart-bar')
-                    ->collapsible()
-                    ->collapsed()
-                    ->columns(3)
-                    ->schema([
-                        Forms\Components\Placeholder::make('first_login_at')
-                            ->label('Login Pertama')
-                            ->content(fn ($record) => $record?->first_login_at
-                                ? $record->first_login_at->format('d M Y H:i:s')
-                                : 'Belum pernah login'
-                            )
-                            ->columnSpan(1),
+                                        Forms\Components\Select::make('created_by_type')
+                                            ->label('Dibuat Oleh')
+                                            ->options([
+                                                User::CREATED_BY_SYSTEM => 'System',
+                                                User::CREATED_BY_ADMIN => 'Admin',
+                                            ])
+                                            ->default(User::CREATED_BY_ADMIN)
+                                            ->native(false)
+                                            ->required()
+                                            ->prefixIcon('heroicon-o-cog-6-tooth')
+                                            ->columnSpan(1),
 
-                        Forms\Components\Placeholder::make('last_login_at')
-                            ->label('Login Terakhir')
-                            ->content(fn ($record) => $record?->last_login_at
-                                ? $record->last_login_at->format('d M Y H:i:s')
-                                : 'Belum pernah login'
-                            )
-                            ->columnSpan(1),
+                                        Forms\Components\Select::make('blocked_by')
+                                            ->label('Diblokir Oleh')
+                                            ->relationship('blocker', 'name')
+                                            ->searchable()
+                                            ->preload()
+                                            ->native(false)
+                                            ->prefixIcon('heroicon-o-user')
+                                            ->placeholder('Pilih user yang memblokir')
+                                            ->columnSpan(1),
 
-                        Forms\Components\Placeholder::make('last_login_ip')
-                            ->label('IP Address Terakhir')
-                            ->content(fn ($record) => $record?->last_login_ip
-                                ? $record->last_login_ip
-                                : '-'
-                            )
-                            ->columnSpan(1),
-                    ]),
+                                        Forms\Components\DateTimePicker::make('blocked_until')
+                                            ->label('Blokir Sampai')
+                                            ->prefixIcon('heroicon-o-calendar')
+                                            ->displayFormat('d M Y H:i')
+                                            ->native(false)
+                                            ->seconds(false)
+                                            ->helperText('Kosongkan untuk blokir permanen')
+                                            ->columnSpan(1),
 
-                // ========== SECTION 5: INFORMASI PASSWORD (READ-ONLY) ==========
-                Forms\Components\Section::make('Riwayat Password')
-                    ->description('Informasi perubahan password (Read-Only)')
-                    ->icon('heroicon-o-lock-closed')
-                    ->collapsible()
-                    ->collapsed()
-                    ->columns(2)
-                    ->schema([
-                        Forms\Components\Placeholder::make('password_changed_at')
-                            ->label('Password Terakhir Diubah')
-                            ->content(fn ($record) => $record?->password_changed_at
-                                ? $record->password_changed_at->format('d M Y H:i:s')
-                                : 'Belum pernah diubah'
-                            )
-                            ->columnSpan(1),
+                                        Forms\Components\Textarea::make('blocked_reason')
+                                            ->label('Alasan Pemblokiran')
+                                            ->rows(3)
+                                            ->placeholder('Masukkan alasan detail mengapa user diblokir...')
+                                            ->maxLength(1000)
+                                            ->columnSpanFull(),
+                                    ]),
 
-                        Forms\Components\Placeholder::make('password_changed_by')
-                            ->label('Diubah Oleh')
-                            ->content(fn ($record) => $record?->passwordChanger
-                                ? $record->passwordChanger->name
-                                : '-'
-                            )
-                            ->columnSpan(1),
-                    ]),
+                                Forms\Components\Section::make('Informasi Keamanan')
+                                    ->description('Data keamanan (Read-Only)')
+                                    ->columns(2)
+                                    ->schema([
+                                        Forms\Components\TextInput::make('failed_login_attempts')
+                                            ->label('Percobaan Login Gagal')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->prefixIcon('heroicon-o-exclamation-triangle')
+                                            ->suffix('kali')
+                                            ->helperText('Akan direset otomatis setelah login berhasil')
+                                            ->columnSpan(1),
 
-                // ========== SECTION 6: INFORMASI SISTEM (READ-ONLY) ==========
-                Forms\Components\Section::make('Informasi Sistem')
-                    ->description('Data sistem dan audit trail (Read-Only)')
-                    ->icon('heroicon-o-server')
-                    ->collapsible()
-                    ->collapsed()
-                    ->columns(3)
-                    ->schema([
-                        Forms\Components\Placeholder::make('uuid')
-                            ->label('UUID')
-                            ->content(fn ($record) => $record?->uuid
-                                ? $record->uuid
-                                : 'Auto-generated'
-                            )
-                            ->columnSpan(1),
+                                        Forms\Components\DateTimePicker::make('locked_at')
+                                            ->label('Waktu Dikunci')
+                                            ->disabled()
+                                            ->dehydrated(false)
+                                            ->prefixIcon('heroicon-o-lock-closed')
+                                            ->displayFormat('d M Y H:i:s')
+                                            ->native(false)
+                                            ->helperText('Otomatis dikunci setelah 5x gagal login')
+                                            ->columnSpan(1),
+                                    ]),
+                            ]),
 
-                        Forms\Components\Placeholder::make('created_at')
-                            ->label('Dibuat Pada')
-                            ->content(fn ($record) => $record?->created_at
-                                ? $record->created_at->format('d M Y H:i:s')
-                                : 'Belum disimpan'
-                            )
-                            ->columnSpan(1),
+                        // ========== TAB 4: AKTIVITAS ==========
+                        Forms\Components\Tabs\Tab::make('Aktivitas')
+                            ->icon('heroicon-o-chart-bar')
+                            ->schema([
+                                Forms\Components\Section::make('Aktivitas Login')
+                                    ->description('Riwayat login pengguna')
+                                    ->columns(3)
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('first_login_at')
+                                            ->label('Login Pertama')
+                                            ->content(fn ($record) => $record?->first_login_at
+                                                ? $record->first_login_at->format('d M Y H:i:s')
+                                                : 'Belum pernah login'
+                                            )
+                                            ->columnSpan(1),
 
-                        Forms\Components\Placeholder::make('updated_at')
-                            ->label('Terakhir Diperbarui')
-                            ->content(fn ($record) => $record?->updated_at
-                                ? $record->updated_at->format('d M Y H:i:s')
-                                : 'Belum ada update'
-                            )
-                            ->columnSpan(1),
-                    ]),
+                                        Forms\Components\Placeholder::make('last_login_at')
+                                            ->label('Login Terakhir')
+                                            ->content(fn ($record) => $record?->last_login_at
+                                                ? $record->last_login_at->format('d M Y H:i:s')
+                                                : 'Belum pernah login'
+                                            )
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Placeholder::make('last_login_ip')
+                                            ->label('IP Address Terakhir')
+                                            ->content(fn ($record) => $record?->last_login_ip
+                                                ? $record->last_login_ip
+                                                : '-'
+                                            )
+                                            ->columnSpan(1),
+                                    ]),
+
+                                Forms\Components\Section::make('Riwayat Password')
+                                    ->description('Informasi perubahan password')
+                                    ->columns(2)
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('password_changed_at')
+                                            ->label('Password Terakhir Diubah')
+                                            ->content(fn ($record) => $record?->password_changed_at
+                                                ? $record->password_changed_at->format('d M Y H:i:s')
+                                                : 'Belum pernah diubah'
+                                            )
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Placeholder::make('password_changed_by')
+                                            ->label('Diubah Oleh')
+                                            ->content(fn ($record) => $record?->passwordChanger
+                                                ? $record->passwordChanger->name
+                                                : '-'
+                                            )
+                                            ->columnSpan(1),
+                                    ]),
+                            ]),
+
+                        // ========== TAB 5: SISTEM ==========
+                        Forms\Components\Tabs\Tab::make('Sistem')
+                            ->icon('heroicon-o-server')
+                            ->schema([
+                                Forms\Components\Section::make('Informasi Sistem')
+                                    ->description('Data sistem dan audit trail (Read-Only)')
+                                    ->columns(3)
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('uuid')
+                                            ->label('UUID')
+                                            ->content(fn ($record) => $record?->uuid
+                                                ? $record->uuid
+                                                : 'Auto-generated'
+                                            )
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Placeholder::make('created_at')
+                                            ->label('Dibuat Pada')
+                                            ->content(fn ($record) => $record?->created_at
+                                                ? $record->created_at->format('d M Y H:i:s')
+                                                : 'Belum disimpan'
+                                            )
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Placeholder::make('updated_at')
+                                            ->label('Terakhir Diperbarui')
+                                            ->content(fn ($record) => $record?->updated_at
+                                                ? $record->updated_at->format('d M Y H:i:s')
+                                                : 'Belum ada update'
+                                            )
+                                            ->columnSpan(1),
+                                    ]),
+                            ]),
+                    ])
+                    ->columnSpanFull()
+                    ->persistTabInQueryString()
+                    ->activeTab(1),
             ])
             ->columns(1);
     }
@@ -319,9 +322,11 @@ class UserResource extends Resource
                 // Avatar Column
                 Tables\Columns\ImageColumn::make('avatar')
                     ->label('Foto')
+                    ->disk('public')
                     ->circular()
-                    ->defaultImageUrl(url('/images/default-avatar.png'))
-                    ->size(45),
+                    ->defaultImageUrl(asset('storage/avatars/default-avatar.svg'))
+                    ->size(45)
+                    ->visibility('public'),
 
                 // Name & Email Column (Stacked)
                 Tables\Columns\TextColumn::make('name')
@@ -396,7 +401,8 @@ class UserResource extends Resource
                 // Last Login with IP Description
                 Tables\Columns\TextColumn::make('last_login_at')
                     ->label('Login Terakhir')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable()
                     ->description(fn (User $record): ?string => $record->last_login_ip)
@@ -407,7 +413,8 @@ class UserResource extends Resource
                 // First Login (Hidden by default)
                 Tables\Columns\TextColumn::make('first_login_at')
                     ->label('Login Pertama')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-calendar')
@@ -436,7 +443,8 @@ class UserResource extends Resource
                 // Locked At (Hidden by default)
                 Tables\Columns\TextColumn::make('locked_at')
                     ->label('Dikunci')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-lock-closed')
@@ -447,7 +455,8 @@ class UserResource extends Resource
                 // Blocked Until (Hidden by default)
                 Tables\Columns\TextColumn::make('blocked_until')
                     ->label('Blokir Sampai')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-calendar')
@@ -458,7 +467,8 @@ class UserResource extends Resource
                 // Created At (Hidden by default)
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Dibuat')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-calendar-days')
@@ -467,7 +477,8 @@ class UserResource extends Resource
                 // Updated At (Hidden by default)
                 Tables\Columns\TextColumn::make('updated_at')
                     ->label('Diperbarui')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-arrow-path')
@@ -476,7 +487,8 @@ class UserResource extends Resource
                 // Deleted At (Hidden by default)
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->label('Dihapus')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y H:i:s')
+                    ->timezone('Asia/Jakarta')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->icon('heroicon-o-trash')

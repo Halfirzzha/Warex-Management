@@ -38,9 +38,9 @@ class SecurityHeaders
         $response->headers->set('Content-Security-Policy', implode('; ', [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Filament needs unsafe-eval
-            "style-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
             "img-src 'self' data: https:",
-            "font-src 'self' data:",
+            "font-src 'self' data: https://fonts.bunny.net",
             "connect-src 'self'",
             "frame-ancestors 'self'",
         ]));

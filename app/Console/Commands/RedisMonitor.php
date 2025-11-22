@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\RedisService;
+use App\Support\CacheManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Redis;
 
@@ -34,7 +34,7 @@ class RedisMonitor extends Command
 
         // Check health
         $this->info('📊 Redis Health Check:');
-        if (RedisService::isHealthy()) {
+        if (CacheManager::testConnection($connection)) {
             $this->info('   ✓ Redis connection: HEALTHY');
         } else {
             $this->error('   ✗ Redis connection: FAILED');
@@ -47,7 +47,7 @@ class RedisMonitor extends Command
         // Get connection info
         $this->info("📈 Redis Server Information (Connection: {$connection}):");
         try {
-            $info = RedisService::getConnectionInfo($connection);
+            $info = CacheManager::getRedisInfo($connection);
 
             $this->table(
                 ['Metric', 'Value'],
@@ -64,13 +64,13 @@ class RedisMonitor extends Command
             $this->newLine();
 
             // Database size
-            $dbSize = RedisService::getDatabaseSize($connection);
+            $dbSize = CacheManager::getDatabaseSize($connection);
             $this->info("🗄️  Database Size: {$dbSize} keys");
 
             // Warehouse keys
             if ($connection === 'cache') {
                 $this->newLine();
-                $warehouseKeys = RedisService::getAllKeys();
+                $warehouseKeys = CacheManager::getKeys('warehouse:*');
                 $this->info('🏢 Warehouse Cache Keys: '.count($warehouseKeys).' keys');
 
                 if (! empty($warehouseKeys) && $this->confirm('Show warehouse keys?', false)) {

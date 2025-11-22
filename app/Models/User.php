@@ -3,7 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Traits\ManagesMediaFiles;
 use Carbon\Carbon;
+use Filament\Models\Contracts\HasAvatar;
 use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -13,12 +15,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class User extends Authenticatable
+class User extends Authenticatable implements HasAvatar
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasFactory, Notifiable, SoftDeletes, ManagesMediaFiles;
 
     /**
      * Account Status Constants
@@ -851,5 +854,22 @@ class User extends Authenticatable
         }
 
         return $suspicionScore >= 50;
+    }
+
+    /**
+     * Get the user's avatar URL for Filament
+     * This will be used in topbar, user menu, etc.
+     *
+     * @return string|null
+     */
+    public function getFilamentAvatarUrl(): ?string
+    {
+        // If user has uploaded avatar, return the full URL
+        if ($this->avatar && Storage::disk('public')->exists($this->avatar)) {
+            return Storage::disk('public')->url($this->avatar);
+        }
+
+        // Return default avatar as fallback
+        return asset('storage/avatars/default-avatar.svg');
     }
 }

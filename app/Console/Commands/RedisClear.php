@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\RedisService;
+use App\Support\CacheManager;
 
 class RedisClear extends Command
 {
@@ -42,7 +42,7 @@ class RedisClear extends Command
                 return Command::SUCCESS;
             }
 
-            if (RedisService::flushWarehouseCache()) {
+            if (CacheManager::flushWarehouse()) {
                 $this->info('✅ Warehouse cache cleared successfully!');
             } else {
                 $this->error('❌ Failed to clear warehouse cache.');
@@ -59,7 +59,7 @@ class RedisClear extends Command
 
             $this->info("Clearing Redis connection: {$connection}...");
 
-            if (RedisService::flushDatabase($connection)) {
+            if (CacheManager::flushAll(true)) {
                 $this->info("✅ Redis connection '{$connection}' cleared successfully!");
             } else {
                 $this->error("❌ Failed to clear Redis connection '{$connection}'.");
@@ -68,7 +68,7 @@ class RedisClear extends Command
         }
 
         // Show remaining keys
-        $remainingKeys = RedisService::getDatabaseSize($connection);
+        $remainingKeys = CacheManager::getDatabaseSize($connection);
         $this->info("📊 Remaining keys in {$connection}: {$remainingKeys}");
 
         return Command::SUCCESS;

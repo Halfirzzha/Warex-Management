@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="95" fill="#4F46E5" opacity="0.1"/>
+
+  <!-- Warehouse Building -->
+  <path d="M 50 80 L 100 50 L 150 80 L 150 150 L 50 150 Z" fill="#4F46E5"/>
+
+  <!-- Roof Detail -->
+  <path d="M 45 80 L 100 45 L 155 80 L 150 80 L 100 50 L 50 80 Z" fill="#6366F1"/>
+
+  <!-- Door -->
+  <rect x="85" y="110" width="30" height="40" fill="#FFFFFF" opacity="0.9"/>
+
+  <!-- Windows Row 1 -->
+  <rect x="60" y="90" width="15" height="15" fill="#FFFFFF" opacity="0.8"/>
+  <rect x="125" y="90" width="15" height="15" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- Windows Row 2 -->
+  <rect x="60" y="115" width="15" height="15" fill="#FFFFFF" opacity="0.8"/>
+  <rect x="125" y="115" width="15" height="15" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- Box Icon (Warehouse Symbol) -->
+  <g transform="translate(90, 60)">
+    <rect x="0" y="0" width="20" height="20" fill="#FFFFFF" opacity="0.9"/>
+    <path d="M 0 0 L 10 -5 L 20 0 L 10 5 Z" fill="#E0E7FF"/>
+    <path d="M 20 0 L 20 20 L 10 25 L 10 5 Z" fill="#C7D2FE"/>
+  </g>
+
+  <!-- Text: W -->
+  <text x="100" y="185" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#4F46E5" text-anchor="middle">W</text>
+</svg>

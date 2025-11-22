@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" fill="none">
+  <!-- Warehouse Icon -->
+  <g transform="translate(10, 25)">
+    <path d="M 0 20 L 25 5 L 50 20 L 50 50 L 0 50 Z" fill="#4F46E5"/>
+    <path d="M -2 20 L 25 3 L 52 20 L 50 20 L 25 5 L 0 20 Z" fill="#6366F1"/>
+    <rect x="18" y="30" width="14" height="20" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="5" y="25" width="8" height="8" fill="#FFFFFF" opacity="0.8"/>
+    <rect x="37" y="25" width="8" height="8" fill="#FFFFFF" opacity="0.8"/>
+    <g transform="translate(18, 12)">
+      <rect x="0" y="0" width="10" height="10" fill="#FFFFFF" opacity="0.9"/>
+      <path d="M 0 0 L 5 -2.5 L 10 0 L 5 2.5 Z" fill="#E0E7FF"/>
+    </g>
+  </g>
+
+  <!-- Text: Warex Management -->
+  <text x="75" y="55" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="bold" fill="#1F2937">
+    Warex
+    <tspan fill="#4F46E5"> Management</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="75" y="75" font-family="Inter, Arial, sans-serif" font-size="12" fill="#6B7280">
+    Warehouse Management System
+  </text>
+</svg>

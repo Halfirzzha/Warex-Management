@@ -19,11 +19,14 @@ use Illuminate\Support\Facades\Log;
  * - Automatic cache cleanup
  * - Multi-level caching strategy
  * - Cache miss tracking
+ * - Warehouse-specific caching
+ * - Redis counters and operations
  *
  * Usage:
  * CacheManager::warmCache();
  * CacheManager::remember('users.count', 300, fn() => User::count());
  * CacheManager::invalidateTag('users');
+ * CacheManager::warehouse('products', fn() => Product::all(), 3600);
  */
 class CacheManager
 {
@@ -35,6 +38,7 @@ class CacheManager
     private const PREFIX_VIEW = 'view:';
     private const PREFIX_API = 'api:';
     private const PREFIX_STATS = 'stats:';
+    private const PREFIX_WAREHOUSE = 'warehouse:';
 
     /**
      * Cache statistics key
@@ -413,7 +417,236 @@ class CacheManager
                 'query' => self::getSizeByPrefix(self::PREFIX_QUERY),
                 'view' => self::getSizeByPrefix(self::PREFIX_VIEW),
                 'api' => self::getSizeByPrefix(self::PREFIX_API),
+                'warehouse' => self::getSizeByPrefix(self::PREFIX_WAREHOUSE),
             ],
         ];
+    }
+
+    // ========================================================================
+    // WAREHOUSE-SPECIFIC CACHE METHODS (Integrated from RedisService)
+    // ========================================================================
+
+    /**
+     * Cache warehouse data with remember pattern
+     */
+    public static function warehouse(string $key, callable $callback, int $ttl = 3600)
+    {
+        return Cache::remember(self::PREFIX_WAREHOUSE . $key, $ttl, $callback);
+    }
+
+    /**
+     * Put warehouse data into cache
+     */
+    public static function putWarehouse(string $key, $value, int $ttl = 3600): bool
+    {
+        return Cache::put(self::PREFIX_WAREHOUSE . $key, $value, $ttl);
+    }
+
+    /**
+     * Get warehouse data from cache
+     */
+    public static function getWarehouse(string $key, $default = null)
+    {
+        return Cache::get(self::PREFIX_WAREHOUSE . $key, $default);
+    }
+
+    /**
+     * Forget warehouse cache
+     */
+    public static function forgetWarehouse(string $key): bool
+    {
+        return Cache::forget(self::PREFIX_WAREHOUSE . $key);
+    }
+
+    /**
+     * Flush all warehouse cache
+     */
+    public static function flushWarehouse(): int
+    {
+        $keys = Redis::connection('cache')->keys(self::PREFIX_WAREHOUSE . '*');
+        $count = 0;
+
+        foreach ($keys as $key) {
+            $cleanKey = str_replace(config('database.redis.options.prefix'), '', $key);
+            if (Cache::forget($cleanKey)) {
+                $count++;
+            }
+        }
+
+        Log::info('Warehouse cache flushed', ['keys_cleared' => $count]);
+        return $count;
+    }
+
+    /**
+     * Increment counter
+     */
+    public static function incrementCounter(string $key, int $increment = 1): int
+    {
+        $fullKey = 'counter:' . $key;
+        return Redis::connection('cache')->incrby($fullKey, $increment);
+    }
+
+    /**
+     * Decrement counter
+     */
+    public static function decrementCounter(string $key, int $decrement = 1): int
+    {
+        $fullKey = 'counter:' . $key;
+        return Redis::connection('cache')->decrby($fullKey, $decrement);
+    }
+
+    /**
+     * Get counter value
+     */
+    public static function getCounter(string $key): int
+    {
+        $fullKey = 'counter:' . $key;
+        return (int) Redis::connection('cache')->get($fullKey) ?? 0;
+    }
+
+    /**
+     * Reset counter to zero
+     */
+    public static function resetCounter(string $key): bool
+    {
+        $fullKey = 'counter:' . $key;
+        return Redis::connection('cache')->set($fullKey, 0);
+    }
+
+    /**
+     * Get multiple keys at once
+     */
+    public static function getMultiple(array $keys, string $prefix = self::PREFIX_DATA): array
+    {
+        $prefixedKeys = array_map(fn($key) => $prefix . $key, $keys);
+        $values = Cache::many($prefixedKeys);
+
+        $result = [];
+        foreach ($values as $key => $value) {
+            $cleanKey = str_replace($prefix, '', $key);
+            $result[$cleanKey] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Set multiple keys at once
+     */
+    public static function putMultiple(array $values, int $ttl = 3600, string $prefix = self::PREFIX_DATA): bool
+    {
+        foreach ($values as $key => $value) {
+            Cache::put($prefix . $key, $value, $ttl);
+        }
+        return true;
+    }
+
+    /**
+     * Check if key exists in cache
+     */
+    public static function exists(string $key, string $prefix = self::PREFIX_DATA): bool
+    {
+        return Cache::has($prefix . $key);
+    }
+
+    /**
+     * Get Redis connection information
+     */
+    public static function getRedisInfo(string $connection = 'cache'): array
+    {
+        try {
+            $info = Redis::connection($connection)->info();
+
+            return [
+                'redis_version' => $info['redis_version'] ?? 'unknown',
+                'uptime_in_seconds' => $info['uptime_in_seconds'] ?? 0,
+                'uptime_in_days' => round(($info['uptime_in_seconds'] ?? 0) / 86400, 2),
+                'connected_clients' => $info['connected_clients'] ?? 0,
+                'used_memory_human' => $info['used_memory_human'] ?? '0B',
+                'used_memory_peak_human' => $info['used_memory_peak_human'] ?? '0B',
+                'total_connections_received' => $info['total_connections_received'] ?? 0,
+                'total_commands_processed' => $info['total_commands_processed'] ?? 0,
+                'instantaneous_ops_per_sec' => $info['instantaneous_ops_per_sec'] ?? 0,
+                'keyspace_hits' => $info['keyspace_hits'] ?? 0,
+                'keyspace_misses' => $info['keyspace_misses'] ?? 0,
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to get Redis info', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Get database size (total keys)
+     */
+    public static function getDatabaseSize(string $connection = 'cache'): int
+    {
+        try {
+            return Redis::connection($connection)->dbsize();
+        } catch (\Exception $e) {
+            Log::error('Failed to get database size', ['error' => $e->getMessage()]);
+            return 0;
+        }
+    }
+
+    /**
+     * Test Redis connection health
+     */
+    public static function testConnection(string $connection = 'cache'): bool
+    {
+        try {
+            $response = Redis::connection($connection)->ping();
+            // Predis returns Status object with payload "PONG"
+            // PhpRedis returns string "PONG" or true
+            if (is_object($response) && method_exists($response, 'getPayload')) {
+                return $response->getPayload() === 'PONG';
+            }
+            return $response === 'PONG' || $response === true;
+        } catch (\Exception $e) {
+            Log::error("Redis connection '{$connection}' test failed", ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Get all cache keys matching pattern
+     */
+    public static function getKeys(string $pattern = '*'): array
+    {
+        try {
+            $keys = Redis::connection('cache')->keys($pattern);
+            return array_map(function($key) {
+                return str_replace(config('database.redis.options.prefix'), '', $key);
+            }, $keys);
+        } catch (\Exception $e) {
+            Log::error('Failed to get cache keys', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * Get Time To Live for a key (in seconds)
+     */
+    public static function getTTL(string $key, string $prefix = self::PREFIX_DATA): int
+    {
+        try {
+            $ttl = Redis::connection('cache')->ttl($prefix . $key);
+            return $ttl > 0 ? $ttl : 0;
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Set expiration time for existing key
+     */
+    public static function setExpire(string $key, int $seconds, string $prefix = self::PREFIX_DATA): bool
+    {
+        try {
+            return Redis::connection('cache')->expire($prefix . $key, $seconds);
+        } catch (\Exception $e) {
+            Log::error('Failed to set expiration', ['key' => $key, 'error' => $e->getMessage()]);
+            return false;
+        }
     }
 }
