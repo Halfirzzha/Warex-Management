@@ -48,21 +48,24 @@ class UserResource extends Resource
                                             ->label('Foto Profil')
                                             ->image()
                                             ->avatar()
+                                            ->disk('public')
+                                            ->directory('avatars/users')
+                                            ->visibility('public')
                                             ->imageEditor()
-                                            ->imageEditorAspectRatios(['1:1'])
+                                            ->imageEditorMode(2)
+                                            ->circleCropper()
                                             ->imageCropAspectRatio('1:1')
                                             ->imageResizeTargetWidth('800')
                                             ->imageResizeTargetHeight('800')
-                                            ->directory('avatars/users')
-                                            ->visibility('public')
+                                            ->imageResizeMode('contain')
                                             ->maxSize(5120)
                                             ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])
                                             ->downloadable()
                                             ->openable()
                                             ->previewable()
-                                            ->helperText('Upload & klik untuk crop. Max 5MB.')
+                                            ->deletable()
+                                            ->helperText('Upload foto baru untuk crop otomatis. Atau hapus & upload ulang untuk re-crop.')
                                             ->columnSpan(3),
-
                                         // Profile Fields - 9 columns
                                         Forms\Components\Grid::make(1)
                                             ->schema([
@@ -187,6 +190,7 @@ class UserResource extends Resource
                                         Forms\Components\Textarea::make('blocked_reason')
                                             ->label('Alasan Pemblokiran')
                                             ->rows(3)
+                                            ->autosize(false)
                                             ->placeholder('Masukkan alasan detail mengapa user diblokir...')
                                             ->maxLength(1000)
                                             ->columnSpanFull(),

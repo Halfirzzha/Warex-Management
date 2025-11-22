@@ -39,9 +39,11 @@ class SecurityHeaders
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Filament needs unsafe-eval
             "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
-            "img-src 'self' data: https:",
+            "img-src 'self' data: blob: https:", // blob: needed for FilePond image preview
             "font-src 'self' data: https://fonts.bunny.net",
             "connect-src 'self'",
+            "worker-src 'self' blob:", // Web Workers for FilePond image processing
+            "child-src 'self' blob:", // Child contexts for FilePond
             "frame-ancestors 'self'",
         ]));
 
