@@ -510,7 +510,8 @@ class CacheManager
     public static function resetCounter(string $key): bool
     {
         $fullKey = 'counter:' . $key;
-        return Redis::connection('cache')->set($fullKey, 0);
+        $result = Redis::connection('cache')->set($fullKey, 0);
+        return $result == 'OK' || $result === true;
     }
 
     /**
@@ -647,6 +648,70 @@ class CacheManager
         } catch (\Exception $e) {
             Log::error('Failed to set expiration', ['key' => $key, 'error' => $e->getMessage()]);
             return false;
+        }
+    }
+
+    // ========================================
+    // ADDITIONAL METHODS FOR INTEGRATION
+    // ========================================
+
+    /**
+     * Invalidate all cache untuk warehouse tertentu
+     */
+    public static function invalidateWarehouse(string $warehouse): int
+    {
+        $pattern = self::PREFIX_WAREHOUSE . str_replace(' ', '_', strtolower($warehouse)) . ':*';
+
+        try {
+            $keys = Redis::connection('cache')->keys($pattern);
+            $count = 0;
+
+            foreach ($keys as $key) {
+                $cleanKey = str_replace(config('database.redis.options.prefix', ''), '', $key);
+                if (Cache::forget($cleanKey)) {
+                    $count++;
+                }
+            }
+
+            Log::info("Cache invalidated for warehouse: {$warehouse}", ['keys_cleared' => $count]);
+            return $count;
+        } catch (\Exception $e) {
+            Log::error("Failed to invalidate warehouse cache: {$warehouse}", ['error' => $e->getMessage()]);
+            return 0;
+        }
+    }
+
+    /**
+     * Forget single cache key (wrapper untuk Cache::forget dengan logging)
+     */
+    public static function forget(string $key): bool
+    {
+        try {
+            return Cache::forget($key);
+        } catch (\Exception $e) {
+            Log::error("Failed to forget cache key: {$key}", ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Get all counters (untuk dashboard)
+     */
+    public static function getAllCounters(): array
+    {
+        try {
+            $keys = Redis::connection('cache')->keys('counter:*');
+            $counters = [];
+
+            foreach ($keys as $key) {
+                $cleanKey = str_replace(['counter:', config('database.redis.options.prefix', '')], '', $key);
+                $counters[$cleanKey] = self::getCounter($cleanKey);
+            }
+
+            return $counters;
+        } catch (\Exception $e) {
+            Log::error('Failed to get all counters', ['error' => $e->getMessage()]);
+            return [];
         }
     }
 }
