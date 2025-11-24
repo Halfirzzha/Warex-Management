@@ -17,7 +17,7 @@ class OutboundObserver
     public function creating(Outbound $outbound): void
     {
         // Auto-set created_by
-        if (Auth::check() && !$outbound->created_by) {
+        if (Auth::check() && ! $outbound->created_by) {
             $outbound->created_by = Auth::id();
         }
 
@@ -27,17 +27,12 @@ class OutboundObserver
         }
 
         // Auto-copy dari inbound jika ada
-        if ($outbound->inbound_id && !$outbound->name_product) {
+        if ($outbound->inbound_id && ! $outbound->name_product) {
             $outbound->copyFromInbound();
         }
 
         // Auto-calculate weights
         $outbound->calculateWeights();
-
-        // Validate stock jika ada inbound_id (CRITICAL VALIDATION)
-        if ($outbound->inbound_id && !$outbound->validateStock()) {
-            throw new \Exception('Stock tidak mencukupi untuk outbound ini. Silakan periksa ketersediaan stock.');
-        }
 
         // Log activity
         Log::info('Outbound creating', [
@@ -96,14 +91,14 @@ class OutboundObserver
         // Re-calculate weights jika data berat berubah
         if ($outbound->isDirty([
             'total_containers', 'items_per_container',
-            'weight_per_item', 'weight_per_container', 'quantity'
+            'weight_per_item', 'weight_per_container', 'quantity',
         ])) {
             $outbound->calculateWeights();
         }
 
         // Validate stock jika total_containers berubah dan ada inbound_id (CRITICAL)
         if ($outbound->isDirty('total_containers') && $outbound->inbound_id) {
-            if (!$outbound->validateStock()) {
+            if (! $outbound->validateStock()) {
                 $stock = Stock::getByInbound($outbound->inbound_id, $outbound->warehouse_from);
                 $available = $stock ? $stock->available_stock : 0;
                 $unit = $stock ? $stock->unit_type : 'unit';
@@ -129,6 +124,24 @@ class OutboundObserver
             // Update counters
             CacheManager::decrementCounter("outbounds.status.{$oldStatus}");
             CacheManager::incrementCounter("outbounds.status.{$newStatus}");
+
+            // Send notification jika status berubah ke inspection_completed (pending approval)
+            if ($newStatus === 'inspection_completed') {
+                $this->sendPendingApprovalNotification($outbound);
+            }
+        }
+    }
+
+    /**
+     * Send pending approval notification
+     */
+    protected function sendPendingApprovalNotification(Outbound $outbound): void
+    {
+        // Get all admin/approver users
+        $admins = \App\Models\User::all(); // Adjust based on your role logic
+
+        foreach ($admins as $admin) {
+            $admin->notify(new \App\Notifications\OutboundPendingApprovalNotification($outbound));
         }
     }
 
@@ -153,16 +166,24 @@ class OutboundObserver
         CacheManager::forget("outbound.stats.{$outbound->warehouse_from}.{$outbound->purpose_type}");
 
         // ========================================
-        // AUTO-REDUCE STOCK
+        // AUTO-REDUCE/RESTORE STOCK
         // ========================================
-        // Jika status berubah ke approved/completed, reduce stock
-        if ($outbound->isDirty('status') && in_array($outbound->status, ['approved', 'picked_up', 'completed'])) {
+        $isApprovedStatus = in_array($outbound->status, ['approved', 'picked_up', 'completed']);
+        $wasPreviouslyApproved = in_array($outbound->getOriginal('status'), ['approved', 'picked_up', 'completed']);
+
+        // CASE 1: Status berubah ke approved/completed - reduce stock pertama kali
+        if ($outbound->isDirty('status') && $isApprovedStatus && ! $wasPreviouslyApproved) {
             $this->reduceStock($outbound);
         }
 
-        // Jika status berubah ke cancelled/rejected, restore stock
-        if ($outbound->isDirty('status') && in_array($outbound->status, ['cancelled', 'rejected'])) {
+        // CASE 2: Status berubah ke cancelled/rejected - restore stock yang sudah dikurangi
+        elseif ($outbound->isDirty('status') && in_array($outbound->status, ['cancelled', 'rejected']) && $wasPreviouslyApproved) {
             $this->restoreStock($outbound);
+        }
+
+        // CASE 3: Edit total_containers pada outbound yang sudah approved - adjust stock
+        elseif ($outbound->isDirty('total_containers') && $isApprovedStatus && $wasPreviouslyApproved) {
+            $this->adjustStock($outbound);
         }
 
         // Log dengan context lengkap
@@ -179,7 +200,7 @@ class OutboundObserver
      */
     protected function reduceStock(Outbound $outbound): void
     {
-        if (!$outbound->inbound_id || !$outbound->warehouse_from || !$outbound->total_containers) {
+        if (! $outbound->inbound_id || ! $outbound->warehouse_from || ! $outbound->total_containers) {
             return;
         }
 
@@ -189,18 +210,23 @@ class OutboundObserver
                 ->lockForUpdate() // Prevent race condition
                 ->first();
 
-            if (!$stock) {
+            if (! $stock) {
                 Log::error('Stock not found for outbound', [
                     'outbound_code' => $outbound->code,
                     'inbound_id' => $outbound->inbound_id,
                     'warehouse' => $outbound->warehouse_from,
                 ]);
+
                 return;
             }
 
             $success = $stock->reduceStock($outbound->total_containers, Auth::id());
 
             if ($success) {
+                // Save jumlah yang dikurangi untuk tracking adjustment
+                $outbound->stock_reduced_amount = $outbound->total_containers;
+                $outbound->saveQuietly(); // Save tanpa trigger observer lagi
+
                 Log::info('Stock reduced for outbound', [
                     'outbound_code' => $outbound->code,
                     'stock_id' => $stock->id,
@@ -220,17 +246,87 @@ class OutboundObserver
     }
 
     /**
+     * Adjust stock saat edit total_containers pada outbound yang sudah approved
+     */
+    protected function adjustStock(Outbound $outbound): void
+    {
+        if (! $outbound->inbound_id || ! $outbound->warehouse_from) {
+            return;
+        }
+
+        DB::transaction(function () use ($outbound) {
+            $stock = Stock::where('inbound_id', $outbound->inbound_id)
+                ->where('warehouse', $outbound->warehouse_from)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $stock) {
+                Log::error('Stock not found for outbound adjustment', [
+                    'outbound_code' => $outbound->code,
+                    'inbound_id' => $outbound->inbound_id,
+                    'warehouse' => $outbound->warehouse_from,
+                ]);
+
+                return;
+            }
+
+            // Hitung selisih: berapa yang sudah dikurangi vs berapa yang seharusnya dikurangi sekarang
+            $previouslyReduced = (float) $outbound->getOriginal('stock_reduced_amount') ?: 0;
+            $shouldBeReduced = (float) $outbound->total_containers;
+            $adjustment = $shouldBeReduced - $previouslyReduced;
+
+            if ($adjustment > 0) {
+                // User menambah jumlah: reduce stock lagi
+                $success = $stock->reduceStock($adjustment, Auth::id());
+                if ($success) {
+                    $outbound->stock_reduced_amount = $shouldBeReduced;
+                    $outbound->saveQuietly();
+
+                    Log::info('Stock adjusted (reduced more) for edited outbound', [
+                        'outbound_code' => $outbound->code,
+                        'stock_id' => $stock->id,
+                        'previously_reduced' => $previouslyReduced,
+                        'additional_reduction' => $adjustment,
+                        'new_total_reduced' => $shouldBeReduced,
+                        'available_after' => $stock->available_stock,
+                    ]);
+                } else {
+                    throw new \Exception("Stock tidak mencukupi untuk menambah jumlah. Available: {$stock->available_stock}, Need: {$adjustment}");
+                }
+            } elseif ($adjustment < 0) {
+                // User mengurangi jumlah: restore stock
+                $restoreAmount = abs($adjustment);
+                $success = $stock->restoreStock($restoreAmount);
+                if ($success) {
+                    $outbound->stock_reduced_amount = $shouldBeReduced;
+                    $outbound->saveQuietly();
+
+                    Log::info('Stock adjusted (restored) for edited outbound', [
+                        'outbound_code' => $outbound->code,
+                        'stock_id' => $stock->id,
+                        'previously_reduced' => $previouslyReduced,
+                        'restored_amount' => $restoreAmount,
+                        'new_total_reduced' => $shouldBeReduced,
+                        'available_after' => $stock->available_stock,
+                    ]);
+                }
+            }
+            // Jika adjustment = 0, tidak perlu apa-apa
+        });
+    }
+
+    /**
      * Restore stock jika outbound cancelled/rejected
      */
     protected function restoreStock(Outbound $outbound): void
     {
-        if (!$outbound->inbound_id || !$outbound->warehouse_from || !$outbound->total_containers) {
+        if (! $outbound->inbound_id || ! $outbound->warehouse_from || ! $outbound->total_containers) {
             return;
         }
 
         // Cek apakah stock pernah dikurangi (status sebelumnya approved/completed)
         $oldStatus = $outbound->getOriginal('status');
-        if (!in_array($oldStatus, ['approved', 'picked_up', 'completed'])) {
+        if (! in_array($oldStatus, ['approved', 'picked_up', 'completed'])) {
             return; // Stock belum pernah dikurangi, tidak perlu restore
         }
 
@@ -239,13 +335,19 @@ class OutboundObserver
             ->first();
 
         if ($stock) {
-            $success = $stock->restoreStock((float)$outbound->total_containers);
+            // Restore berdasarkan jumlah yang benar-benar sudah dikurangi
+            $amountToRestore = (float) $outbound->stock_reduced_amount ?: (float) $outbound->total_containers;
+            $success = $stock->restoreStock($amountToRestore);
 
             if ($success) {
-                Log::info('Stock restored for cancelled outbound', [
+                // Reset tracking ke 0
+                $outbound->stock_reduced_amount = 0;
+                $outbound->saveQuietly();
+
+                Log::info('Stock restored for cancelled/rejected outbound', [
                     'outbound_code' => $outbound->code,
                     'stock_id' => $stock->id,
-                    'amount' => $outbound->total_containers,
+                    'amount' => $amountToRestore,
                     'available_after' => $stock->available_stock,
                 ]);
             }

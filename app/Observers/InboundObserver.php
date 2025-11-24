@@ -43,6 +43,9 @@ class InboundObserver
      */
     public function created(Inbound $inbound): void
     {
+        // AUTO-CREATE STOCK ENTRY IMMEDIATELY (Real-time monitoring)
+        $this->createOrUpdateStock($inbound);
+
         // Clear cache dengan CacheManager (lebih powerful)
         CacheManager::invalidateTag('inbounds');
         CacheManager::invalidateWarehouse($inbound->warehouse);
@@ -95,6 +98,24 @@ class InboundObserver
             // Update counters
             CacheManager::decrementCounter("inbounds.status.{$oldStatus}");
             CacheManager::incrementCounter("inbounds.status.{$newStatus}");
+
+            // Send notification jika status berubah ke inspection_completed (pending approval)
+            if ($newStatus === 'inspection_completed') {
+                $this->sendPendingApprovalNotification($inbound);
+            }
+        }
+    }
+
+    /**
+     * Send pending approval notification
+     */
+    protected function sendPendingApprovalNotification(Inbound $inbound): void
+    {
+        // Get all admin/approver users
+        $admins = \App\Models\User::all(); // Adjust based on your role logic
+
+        foreach ($admins as $admin) {
+            $admin->notify(new \App\Notifications\InboundPendingApprovalNotification($inbound));
         }
     }
 
@@ -113,12 +134,10 @@ class InboundObserver
         CacheManager::forget("inbound.stats.{$inbound->warehouse}");
 
         // ========================================
-        // AUTO-CREATE/UPDATE STOCK ENTRY
+        // AUTO-UPDATE STOCK ENTRY (Real-time sync)
         // ========================================
-        // Jika status berubah ke approved/stored, create/update stock entry
-        if ($inbound->isDirty('status') && in_array($inbound->status, ['approved', 'stored', 'completed'])) {
-            $this->createOrUpdateStock($inbound);
-        }
+        // Update stock whenever inbound data changes
+        $this->createOrUpdateStock($inbound);
 
         // Jika status berubah ke rejected/cancelled, lock stock
         if ($inbound->isDirty('status') && in_array($inbound->status, ['rejected', 'cancelled'])) {
@@ -135,7 +154,7 @@ class InboundObserver
     }
 
     /**
-     * Create or update stock entry dari inbound
+     * Create or update stock entry dari inbound (Real-time sync)
      */
     protected function createOrUpdateStock(Inbound $inbound): void
     {
@@ -148,46 +167,67 @@ class InboundObserver
                 ->where('warehouse', $inbound->warehouse)
                 ->first();
 
+            // Determine available_stock based on inbound status
+            $availableStock = 0;
+            $status = 'unavailable';
+
+            if (in_array($inbound->status, ['approved', 'stored', 'completed'])) {
+                // Stock available for outbound
+                $existingStockOut = $stock ? $stock->stock_out : 0;
+                $availableStock = $inbound->total_containers - $existingStockOut;
+                $status = 'available';
+            } elseif (in_array($inbound->status, ['rejected', 'cancelled'])) {
+                // Stock locked
+                $availableStock = 0;
+                $status = 'out_of_stock';
+            } else {
+                // Pending status (inspection, etc) - registered but not available
+                $availableStock = 0;
+                $status = 'unavailable';
+            }
+
+            $stockData = [
+                'name_product' => $inbound->name_product,
+                'description_product' => $inbound->description_product,
+                'initial_stock' => $inbound->total_containers,
+                'available_stock' => $availableStock,
+                'unit_type' => $inbound->unit_type,
+                'container_type' => $inbound->container_type,
+                'status' => $status,
+            ];
+
             if ($stock) {
-                // Update existing stock
-                $stock->update([
-                    'name_product' => $inbound->name_product,
-                    'description_product' => $inbound->description_product,
-                    'initial_stock' => $inbound->total_containers,
-                    'available_stock' => $inbound->total_containers - $stock->stock_out,
-                    'unit_type' => $inbound->unit_type,
-                    'container_type' => $inbound->container_type,
-                ]);
+                // Update existing stock (preserve stock_out and reserved_stock)
+                $stock->update($stockData);
 
                 Log::info('Stock updated from inbound', [
                     'stock_id' => $stock->id,
                     'inbound_code' => $inbound->code,
+                    'inbound_status' => $inbound->status,
                     'warehouse' => $inbound->warehouse,
                     'initial_stock' => $stock->initial_stock,
+                    'available_stock' => $stock->available_stock,
                 ]);
             } else {
                 // Create new stock entry
-                $stock = Stock::create([
+                $stock = Stock::create(array_merge($stockData, [
                     'inbound_id' => $inbound->id,
                     'warehouse' => $inbound->warehouse,
-                    'name_product' => $inbound->name_product,
-                    'description_product' => $inbound->description_product,
-                    'initial_stock' => $inbound->total_containers,
-                    'available_stock' => $inbound->total_containers,
                     'reserved_stock' => 0,
                     'stock_out' => 0,
-                    'unit_type' => $inbound->unit_type,
-                    'container_type' => $inbound->container_type,
-                    'status' => 'available',
-                ]);
+                ]));
 
                 Log::info('Stock created from inbound', [
                     'stock_id' => $stock->id,
                     'inbound_code' => $inbound->code,
+                    'inbound_status' => $inbound->status,
                     'warehouse' => $inbound->warehouse,
                     'initial_stock' => $stock->initial_stock,
                 ]);
             }
+
+            // Clear stock cache
+            CacheManager::invalidateTag('stocks');
         });
     }
 

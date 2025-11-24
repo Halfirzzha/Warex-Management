@@ -150,6 +150,9 @@ class OutboundResource extends Resource
                                             ->maxLength(255)
                                             ->placeholder('Contoh: Ikan Tuna Segar Grade A')
                                             ->prefixIcon('heroicon-o-cube')
+                                            ->disabled(fn (Forms\Get $get) => filled($get('inbound_id')))
+                                            ->dehydrated()
+                                            ->helperText(fn (Forms\Get $get) => $get('inbound_id') ? 'Auto-filled dari stock inbound (read-only)' : 'Nama produk yang akan keluar')
                                             ->columnSpanFull(),
 
                                         Forms\Components\Textarea::make('description_product')
@@ -158,6 +161,9 @@ class OutboundResource extends Resource
                                             ->rows(4)
                                             ->placeholder('Deskripsikan kondisi, spesifikasi, dan detail produk yang keluar...')
                                             ->maxLength(1000)
+                                            ->disabled(fn (Forms\Get $get) => filled($get('inbound_id')))
+                                            ->dehydrated()
+                                            ->helperText(fn (Forms\Get $get) => $get('inbound_id') ? 'Auto-filled dari stock inbound (read-only)' : null)
                                             ->columnSpanFull(),
                                     ]),
                             ]),
@@ -172,6 +178,7 @@ class OutboundResource extends Resource
                                         Forms\Components\Select::make('warehouse_from')
                                             ->label('Gudang Asal')
                                             ->required()
+                                            ->live()
                                             ->options([
                                                 'Gudang Koperasi' => 'Gudang Koperasi',
                                                 'Gudang BGN' => 'Gudang BGN',
@@ -179,6 +186,9 @@ class OutboundResource extends Resource
                                             ])
                                             ->searchable()
                                             ->native(false)
+                                            ->disabled(fn (Forms\Get $get) => filled($get('inbound_id')))
+                                            ->dehydrated()
+                                            ->helperText(fn (Forms\Get $get) => $get('inbound_id') ? 'Auto-filled dari stock inbound (read-only)' : 'Pilih gudang asal barang')
                                             ->prefixIcon('heroicon-o-building-storefront')
                                             ->columnSpanFull(),
 
@@ -191,6 +201,9 @@ class OutboundResource extends Resource
                                                 'Lainnya' => 'Lainnya',
                                             ])
                                             ->native(false)
+                                            ->disabled(fn (Forms\Get $get) => filled($get('inbound_id')))
+                                            ->dehydrated()
+                                            ->helperText(fn (Forms\Get $get) => $get('inbound_id') ? 'Auto-filled dari stock inbound (read-only)' : null)
                                             ->prefixIcon('heroicon-o-key')
                                             ->columnSpanFull(),
 
@@ -337,11 +350,43 @@ class OutboundResource extends Resource
                                         Forms\Components\TextInput::make('total_containers')
                                             ->label('Jumlah Container')
                                             ->numeric()
-                                            ->minValue(0)
-                                            ->default(0)
+                                            ->minValue(1)
+                                            ->required()
                                             ->live(onBlur: true)
-                                            ->afterStateUpdated(fn ($state, Forms\Set $set, Forms\Get $get) => self::calculateWeights($set, $get)
-                                            )
+                                            ->afterStateUpdated(fn ($state, Forms\Set $set, Forms\Get $get) => self::calculateWeights($set, $get))
+                                            ->rules([
+                                                fn (Forms\Get $get, ?string $operation, ?Outbound $record): \Closure => function (string $attribute, $value, \Closure $fail) use ($get, $operation, $record) {
+                                                    $inboundId = $get('inbound_id');
+                                                    $warehouseFrom = $get('warehouse_from');
+
+                                                    if ($inboundId && $warehouseFrom && $value > 0) {
+                                                        $stock = \App\Models\Stock::where('inbound_id', $inboundId)
+                                                            ->where('warehouse', $warehouseFrom)
+                                                            ->first();
+
+                                                        if (! $stock) {
+                                                            $fail('Stock untuk inbound ini tidak ditemukan di gudang yang dipilih.');
+                                                            return;
+                                                        }
+
+                                                        // Saat edit outbound yang sudah approved, hitung available stock + yang sudah dikurangi
+                                                        if ($operation === 'edit' && $record && $record->stock_reduced_amount > 0) {
+                                                            // Available stock sekarang + yang sudah dikurangi sebelumnya = total yang bisa digunakan
+                                                            $maxAvailable = $stock->available_stock + $record->stock_reduced_amount;
+
+                                                            if ($value > $maxAvailable) {
+                                                                $fail("Stock tidak mencukupi! Maksimal yang bisa Anda ambil: {$maxAvailable} container (tersedia: {$stock->available_stock} + sudah dikurangi: {$record->stock_reduced_amount}).");
+                                                            }
+                                                        } else {
+                                                            // Create atau edit outbound yang belum approved
+                                                            if ($stock->available_stock < $value) {
+                                                                $fail("Stock tidak mencukupi! Tersedia: {$stock->available_stock} container, diminta: {$value} container.");
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            ])
+                                            ->helperText(fn (Forms\Get $get): ?string => self::getStockInfo($get))
                                             ->prefixIcon('heroicon-o-cube-transparent')
                                             ->columnSpanFull(),
 
@@ -633,6 +678,34 @@ class OutboundResource extends Resource
         // Calculate total weight in Kwintal
         $totalWeightKwintal = $totalWeightKg / 100;
         $set('total_weight_kwintal', round($totalWeightKwintal, 2));
+    }
+
+    // Method untuk menampilkan info stock real-time
+    protected static function getStockInfo(Forms\Get $get): ?string
+    {
+        $inboundId = $get('inbound_id');
+        $warehouseFrom = $get('warehouse_from');
+
+        if (! $inboundId || ! $warehouseFrom) {
+            return null;
+        }
+
+        $stock = \App\Models\Stock::where('inbound_id', $inboundId)
+            ->where('warehouse', $warehouseFrom)
+            ->first();
+
+        if (! $stock) {
+            return 'Stock tidak ditemukan untuk inbound dan gudang ini';
+        }
+
+        // Jika ini edit mode dan sudah ada yang dikurangi, tampilkan info adjustment
+        $stockReduced = (float)($get('stock_reduced_amount') ?? 0);
+        if ($stockReduced > 0) {
+            $maxAvailable = $stock->available_stock + $stockReduced;
+            return "Stock Tersedia: {$stock->available_stock} | Sudah Dikurangi: {$stockReduced} | Max yang Bisa Diambil: {$maxAvailable} | Initial: {$stock->initial_stock}";
+        }
+
+        return "Stock Tersedia: {$stock->available_stock} container | Initial: {$stock->initial_stock} | Status: {$stock->status_label}";
     }
 
     public static function table(Table $table): Table

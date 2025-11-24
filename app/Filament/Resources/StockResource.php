@@ -236,6 +236,7 @@ class StockResource extends Resource
                     ->label('Status')
                     ->options([
                         'available' => 'Tersedia',
+                        'unavailable' => 'Belum Tersedia',
                         'low_stock' => 'Stock Menipis',
                         'out_of_stock' => 'Habis',
                         'locked' => 'Terkunci',

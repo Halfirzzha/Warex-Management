@@ -121,6 +121,7 @@ class Stock extends Model
             'low_stock' => 'Stock Menipis',
             'out_of_stock' => 'Habis',
             'locked' => 'Terkunci',
+            'unavailable' => 'Belum Tersedia',
             default => $this->status,
         };
     }
@@ -132,7 +133,8 @@ class Stock extends Model
             'low_stock' => 'warning',
             'out_of_stock' => 'danger',
             'locked' => 'gray',
-            default => 'gray',
+            'unavailable' => 'info',
+            default => 'secondary',
         };
     }
 

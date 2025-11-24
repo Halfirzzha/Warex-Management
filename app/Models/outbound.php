@@ -52,6 +52,7 @@ class Outbound extends Model
 
         // Detail Perhitungan Berat
         'total_containers',
+        'stock_reduced_amount', // Tracking stok yang sudah dikurangi
         'container_type',
         'items_per_container',
         'weight_per_item',
@@ -101,6 +102,7 @@ class Outbound extends Model
         // Decimals
         'quantity' => 'decimal:2',
         'total_containers' => 'decimal:2',
+        'stock_reduced_amount' => 'decimal:2',
         'items_per_container' => 'decimal:2',
         'weight_per_item' => 'decimal:3',
         'weight_per_container' => 'decimal:3',
