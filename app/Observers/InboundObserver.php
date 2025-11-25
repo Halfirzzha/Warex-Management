@@ -55,12 +55,28 @@ class InboundObserver
         CacheManager::incrementCounter("inbounds.{$inbound->warehouse}.total");
         CacheManager::incrementCounter("inbounds.status.{$inbound->status}");
 
+        // Send notifications to admins
+        $this->sendInboundCreatedNotification($inbound);
+
         // Log activity
         Log::info('Inbound created successfully', [
             'id' => $inbound->id,
             'code' => $inbound->code,
             'warehouse' => $inbound->warehouse,
         ]);
+    }
+
+    /**
+     * Send inbound created notification
+     */
+    protected function sendInboundCreatedNotification(Inbound $inbound): void
+    {
+        // Get all users (adjust based on role/permissions)
+        $users = \App\Models\User::all();
+
+        foreach ($users as $user) {
+            $user->notify(new \App\Notifications\InboundCreatedNotification($inbound));
+        }
     }
 
     /**

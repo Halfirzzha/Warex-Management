@@ -131,7 +131,7 @@ class StockObserver
         $admins = \App\Models\User::all(); // Adjust based on your admin role logic
 
         foreach ($admins as $admin) {
-            $admin->notify(new \App\Notifications\LowStockNotification($stock));
+            $admin->notify(new \App\Notifications\LowStockAlertNotification($stock));
         }
     }
 

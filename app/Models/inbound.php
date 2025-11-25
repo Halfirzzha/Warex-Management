@@ -12,11 +12,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 #[ObservedBy([InboundObserver::class])]
 class Inbound extends Model
 {
-    use HasTrackingCode, HasWeightCalculation, HasWorkflowStatus;
+    use HasTrackingCode, HasWeightCalculation, HasWorkflowStatus, LogsActivity;
 
     protected $table = 'inbounds';
 
@@ -430,5 +432,17 @@ class Inbound extends Model
             'approver' => $this->approver?->name,
             'available_stock' => $this->getAvailableStock(),
         ];
+    }
+
+    /**
+     * Configure activity log options
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['code', 'name_product', 'warehouse', 'status', 'total_containers', 'quantity'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn (string $eventName) => "Inbound {$eventName}: {$this->code}");
     }
 }

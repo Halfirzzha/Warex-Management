@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
+use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -119,9 +120,9 @@ class UserResource extends Resource
                                         Forms\Components\TextInput::make('password')
                                             ->label('Password')
                                             ->password()
-                                            ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                                             ->dehydrated(fn ($state) => filled($state))
                                             ->required(fn (string $context): bool => $context === 'create')
+                                            ->minLength(8)
                                             ->maxLength(255)
                                             ->placeholder('Minimal 8 karakter')
                                             ->prefixIcon('heroicon-o-key')
@@ -362,6 +363,44 @@ class UserResource extends Resource
                     ->icon('heroicon-o-briefcase')
                     ->color('info')
                     ->placeholder('-'),
+
+                // Roles Badge (Multiple roles support)
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable()
+                    ->separator(',')
+                    ->formatStateUsing(fn ($state) => ucwords(str_replace('_', ' ', $state)))
+                    ->colors([
+                        'danger' => 'super_admin',
+                        'warning' => 'panel_user',
+                        'success' => fn ($state) => str_contains($state, 'admin'),
+                        'info' => fn ($state) => str_contains($state, 'manager'),
+                        'primary' => fn ($state) => str_contains($state, 'operator'),
+                        'gray' => fn ($state) => str_contains($state, 'viewer'),
+                    ])
+                    ->icon('heroicon-o-shield-check')
+                    ->limit(3)
+                    ->placeholder('No role'),
+
+                // Status Badge (Main Priority)
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => ucwords(str_replace('-', ' ', $state)))
+                    ->color(fn ($state) => match ($state) {
+                        'admin' => 'danger',
+                        'manager' => 'warning',
+                        'operator' => 'info',
+                        'viewer' => 'gray',
+                        default => 'primary',
+                    })
+                    ->icon('heroicon-o-shield-check')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
 
                 // Status Badge (Main Priority)
                 Tables\Columns\BadgeColumn::make('account_status')
@@ -626,7 +665,7 @@ class UserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\RolesRelationManager::class,
         ];
     }
 

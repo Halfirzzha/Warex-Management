@@ -2,71 +2,107 @@
 
 namespace App\Policies;
 
-use App\Models\Stock;
 use App\Models\User;
+use App\Models\Stock;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class StockPolicy
 {
+    use HandlesAuthorization;
+
     /**
-     * Determine if the user can view any stocks.
-     * READ-ONLY: Semua user bisa melihat
+     * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return true;
+        return $user->can('view_any_stock');
     }
 
     /**
-     * Determine if the user can view the stock.
-     * READ-ONLY: Semua user bisa melihat
+     * Determine whether the user can view the model.
      */
     public function view(User $user, Stock $stock): bool
     {
-        return true;
+        return $user->can('view_stock');
     }
 
     /**
-     * Determine if the user can create stocks.
-     * LOCKED: Hanya system (via Observer) yang bisa create
+     * Determine whether the user can create models.
      */
     public function create(User $user): bool
     {
-        return false; // ALWAYS FALSE - System-managed only
+        return $user->can('create_stock');
     }
 
     /**
-     * Determine if the user can update the stock.
-     * LOCKED: Hanya system (via Observer) yang bisa update
+     * Determine whether the user can update the model.
      */
     public function update(User $user, Stock $stock): bool
     {
-        return false; // ALWAYS FALSE - System-managed only
+        return $user->can('update_stock');
     }
 
     /**
-     * Determine if the user can delete the stock.
-     * LOCKED: Hanya system (via Observer) yang bisa delete
+     * Determine whether the user can delete the model.
      */
     public function delete(User $user, Stock $stock): bool
     {
-        return false; // ALWAYS FALSE - System-managed only
+        return $user->can('delete_stock');
     }
 
     /**
-     * Determine if the user can restore the stock.
-     * LOCKED: Tidak ada restore manual
+     * Determine whether the user can bulk delete.
      */
-    public function restore(User $user, Stock $stock): bool
+    public function deleteAny(User $user): bool
     {
-        return false;
+        return $user->can('delete_any_stock');
     }
 
     /**
-     * Determine if the user can permanently delete the stock.
-     * LOCKED: Tidak ada force delete manual
+     * Determine whether the user can permanently delete.
      */
     public function forceDelete(User $user, Stock $stock): bool
     {
-        return false;
+        return $user->can('force_delete_stock');
+    }
+
+    /**
+     * Determine whether the user can permanently bulk delete.
+     */
+    public function forceDeleteAny(User $user): bool
+    {
+        return $user->can('force_delete_any_stock');
+    }
+
+    /**
+     * Determine whether the user can restore.
+     */
+    public function restore(User $user, Stock $stock): bool
+    {
+        return $user->can('restore_stock');
+    }
+
+    /**
+     * Determine whether the user can bulk restore.
+     */
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('restore_any_stock');
+    }
+
+    /**
+     * Determine whether the user can replicate.
+     */
+    public function replicate(User $user, Stock $stock): bool
+    {
+        return $user->can('replicate_stock');
+    }
+
+    /**
+     * Determine whether the user can reorder.
+     */
+    public function reorder(User $user): bool
+    {
+        return $user->can('reorder_stock');
     }
 }

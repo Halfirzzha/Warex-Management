@@ -84,21 +84,56 @@ class OutboundResource extends Resource
                                             ->columnSpanFull(),
 
                                         Forms\Components\Placeholder::make('inbound_info')
-                                            ->label('Informasi Stock')
+                                            ->label('Informasi Stock Real-Time')
+                                            ->live()
                                             ->content(function (Forms\Get $get) {
                                                 $inboundId = $get('inbound_id');
+                                                $warehouseFrom = $get('warehouse_from');
+
                                                 if (! $inboundId) {
-                                                    return 'Belum ada barang dipilih';
+                                                    return '⚠️ Belum ada barang dipilih';
+                                                }
+
+                                                if (! $warehouseFrom) {
+                                                    return '⚠️ Silakan pilih gudang asal terlebih dahulu';
+                                                }
+
+                                                // Get real-time stock data
+                                                $stock = \App\Models\Stock::where('inbound_id', $inboundId)
+                                                    ->where('warehouse', $warehouseFrom)
+                                                    ->first();
+
+                                                if (! $stock) {
+                                                    return '❌ Stock tidak ditemukan untuk inbound dan gudang ini. Stock mungkin belum tersedia atau sudah habis.';
                                                 }
 
                                                 $inbound = Inbound::find($inboundId);
-                                                if (! $inbound) {
-                                                    return 'Data tidak ditemukan';
-                                                }
+                                                $productName = $inbound?->name_product ?? 'Unknown';
 
-                                                return "Stock tersedia: {$inbound->quantity} {$inbound->unit_type}\n".
-                                                       "Gudang: {$inbound->warehouse}\n".
-                                                       "Kepemilikan: {$inbound->warehouse_ownership}";
+                                                // Calculate stock info
+                                                $available = $stock->available_stock;
+                                                $initial = $stock->initial_stock;
+                                                $stockOut = $stock->stock_out;
+                                                $reserved = $stock->reserved_stock;
+                                                $percentage = $stock->stock_percentage;
+
+                                                $statusEmoji = match($stock->status) {
+                                                    'available' => '✅',
+                                                    'low_stock' => '⚠️',
+                                                    'out_of_stock' => '❌',
+                                                    'locked' => '🔒',
+                                                    default => 'ℹ️'
+                                                };
+
+                                                $lastUpdate = $stock->last_updated_at ? $stock->last_updated_at->diffForHumans() : '-';
+
+                                                return "{$statusEmoji} **{$productName}**\n".
+                                                       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n".
+                                                       "📦 Stock Tersedia: **{$available}** {$stock->unit_type}\n".
+                                                       "📥 Stock Awal: {$initial} | 📤 Keluar: {$stockOut}\n".
+                                                       "🔒 Reserved: {$reserved} | 📊 Persentase: {$percentage}%\n".
+                                                       "🏢 Gudang: {$stock->warehouse}\n".
+                                                       "📅 Update: {$lastUpdate}";
                                             })
                                             ->columnSpanFull(),
 
@@ -298,8 +333,38 @@ class OutboundResource extends Resource
                                             ->numeric()
                                             ->minValue(1)
                                             ->default(1)
-                                            ->prefixIcon('heroicon-o-calculator')
                                             ->live(onBlur: true)
+                                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                                // Auto-calculate weights saat quantity berubah
+                                                self::calculateWeights($set, $get);
+                                            })
+                                            ->rules([
+                                                fn (Forms\Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                                    $inboundId = $get('inbound_id');
+                                                    $warehouseFrom = $get('warehouse_from');
+
+                                                    if (! $inboundId || ! $warehouseFrom || ! $value) {
+                                                        return; // Skip validation jika data belum lengkap
+                                                    }
+
+                                                    $stock = \App\Models\Stock::where('inbound_id', $inboundId)
+                                                        ->where('warehouse', $warehouseFrom)
+                                                        ->first();
+
+                                                    if (! $stock) {
+                                                        $fail('Stock tidak ditemukan untuk inbound dan gudang yang dipilih.');
+                                                        return;
+                                                    }
+
+                                                    $available = $stock->available_stock;
+
+                                                    if ($value > $available) {
+                                                        $fail("Stock tidak mencukupi! Tersedia: {$available} {$stock->unit_type}, diminta: {$value} {$stock->unit_type}.");
+                                                    }
+                                                },
+                                            ])
+                                            ->helperText(fn (Forms\Get $get): ?string => self::getQuantityHelperText($get))
+                                            ->prefixIcon('heroicon-o-calculator')
                                             ->columnSpanFull(),
 
                                         Forms\Components\Select::make('unit_type')
@@ -706,6 +771,36 @@ class OutboundResource extends Resource
         }
 
         return "Stock Tersedia: {$stock->available_stock} container | Initial: {$stock->initial_stock} | Status: {$stock->status_label}";
+    }
+
+    // Method untuk menampilkan helper text quantity (NEW - Real-time stock validation)
+    protected static function getQuantityHelperText(Forms\Get $get): ?string
+    {
+        $inboundId = $get('inbound_id');
+        $warehouseFrom = $get('warehouse_from');
+
+        if (! $inboundId || ! $warehouseFrom) {
+            return '💡 Pilih inbound dan gudang terlebih dahulu untuk melihat stock tersedia';
+        }
+
+        $stock = \App\Models\Stock::where('inbound_id', $inboundId)
+            ->where('warehouse', $warehouseFrom)
+            ->first();
+
+        if (! $stock) {
+            return '⚠️ Stock tidak tersedia';
+        }
+
+        $available = $stock->available_stock;
+        $statusColor = match($stock->status) {
+            'available' => '🟢',
+            'low_stock' => '🟡',
+            'out_of_stock' => '🔴',
+            'locked' => '🔒',
+            default => '⚪'
+        };
+
+        return "{$statusColor} Stock Tersedia: {$available} {$stock->unit_type} | Status: {$stock->status}";
     }
 
     public static function table(Table $table): Table

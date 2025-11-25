@@ -69,6 +69,9 @@ class OutboundObserver
             CacheManager::incrementCounter("outbounds.department.{$outbound->department}");
         }
 
+        // Send notifications to admins
+        $this->sendOutboundCreatedNotification($outbound);
+
         // Log activity
         Log::info('Outbound created successfully', [
             'id' => $outbound->id,
@@ -76,6 +79,19 @@ class OutboundObserver
             'warehouse' => $outbound->warehouse_from,
             'inbound_code' => $outbound->inbound?->code,
         ]);
+    }
+
+    /**
+     * Send outbound created notification
+     */
+    protected function sendOutboundCreatedNotification(Outbound $outbound): void
+    {
+        // Get all users (adjust based on role/permissions)
+        $users = \App\Models\User::all();
+
+        foreach ($users as $user) {
+            $user->notify(new \App\Notifications\OutboundCreatedNotification($outbound));
+        }
     }
 
     /**
@@ -279,7 +295,7 @@ class OutboundObserver
                 // User menambah jumlah: reduce stock lagi
                 $success = $stock->reduceStock($adjustment, Auth::id());
                 if ($success) {
-                    $outbound->stock_reduced_amount = $shouldBeReduced;
+                    $outbound->setAttribute('stock_reduced_amount', $shouldBeReduced);
                     $outbound->saveQuietly();
 
                     Log::info('Stock adjusted (reduced more) for edited outbound', [
@@ -298,7 +314,7 @@ class OutboundObserver
                 $restoreAmount = abs($adjustment);
                 $success = $stock->restoreStock($restoreAmount);
                 if ($success) {
-                    $outbound->stock_reduced_amount = $shouldBeReduced;
+                    $outbound->setAttribute('stock_reduced_amount', $shouldBeReduced);
                     $outbound->saveQuietly();
 
                     Log::info('Stock adjusted (restored) for edited outbound', [
@@ -341,7 +357,7 @@ class OutboundObserver
 
             if ($success) {
                 // Reset tracking ke 0
-                $outbound->stock_reduced_amount = 0;
+                $outbound->setAttribute('stock_reduced_amount', 0);
                 $outbound->saveQuietly();
 
                 Log::info('Stock restored for cancelled/rejected outbound', [

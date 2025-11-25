@@ -4,8 +4,6 @@ namespace App\Filament\Pages;
 
 use App\Filament\Widgets\InboundOutboundTrendChart;
 use App\Filament\Widgets\LowStockAlertWidget;
-use App\Filament\Widgets\StockDistributionChart;
-use App\Filament\Widgets\WarehouseBreakdownWidget;
 use App\Filament\Widgets\WarehouseStatsOverview;
 use Filament\Pages\Dashboard as BaseDashboard;
 
@@ -21,10 +19,8 @@ class Dashboard extends BaseDashboard
     {
         return [
             WarehouseStatsOverview::class,
-            WarehouseBreakdownWidget::class,
             InboundOutboundTrendChart::class,
             LowStockAlertWidget::class,
-            StockDistributionChart::class,
         ];
     }
 

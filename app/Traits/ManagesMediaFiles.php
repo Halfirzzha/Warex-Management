@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -117,7 +118,7 @@ trait ManagesMediaFiles
             return $deleted;
         } catch (\Exception $e) {
             // Log error but don't throw exception
-            \Log::warning('Failed to delete old file', [
+            Log::warning('Failed to delete old file', [
                 'file' => $filePath,
                 'error' => $e->getMessage(),
             ]);
@@ -173,7 +174,7 @@ trait ManagesMediaFiles
                 }
             }
         } catch (\Exception $e) {
-            \Log::warning('Failed to cleanup empty directories', [
+            Log::warning('Failed to cleanup empty directories', [
                 'directory' => $directory ?? 'unknown',
                 'error' => $e->getMessage(),
             ]);
@@ -196,7 +197,7 @@ trait ManagesMediaFiles
 
             return false;
         } catch (\Exception $e) {
-            \Log::warning('Failed to delete directory', [
+            Log::warning('Failed to delete directory', [
                 'directory' => $directory,
                 'error' => $e->getMessage(),
             ]);
@@ -234,7 +235,7 @@ trait ManagesMediaFiles
             return null;
         }
 
-        return Storage::disk($disk)->url($filePath);
+        return asset('storage/' . $filePath);
     }
 
     /**

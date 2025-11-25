@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 #[ObservedBy([StockObserver::class])]
 class Stock extends Model
 {
+    use LogsActivity;
     protected $table = 'stocks';
 
     // ========================================
@@ -326,5 +329,17 @@ class Stock extends Model
     {
         Cache::tags(['stocks'])->forget("stock.inbound.{$this->inbound_id}.{$this->warehouse}");
         Cache::tags(['stocks'])->forget("stock.stats.{$this->warehouse}");
+    }
+
+    /**
+     * Configure activity log options
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['warehouse', 'name_product', 'initial_stock', 'available_stock', 'stock_out', 'reserved_stock', 'status'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn(string $eventName) => "Stock {$eventName}: {$this->name_product} at {$this->warehouse}");
     }
 }

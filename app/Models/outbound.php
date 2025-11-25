@@ -11,11 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 #[ObservedBy([OutboundObserver::class])]
 class Outbound extends Model
 {
-    use HasTrackingCode, HasWeightCalculation, HasWorkflowStatus;
+    use HasTrackingCode, HasWeightCalculation, HasWorkflowStatus, LogsActivity;
 
     protected $table = 'outbounds';
 
@@ -176,28 +178,30 @@ class Outbound extends Model
 
     // ========================================
     // AUTO-CALCULATE WEIGHTS (AKURAT & OTOMATIS)
+    // Note: Static type checker may show warnings for decimal assignments,
+    // but Laravel will handle the conversion automatically at runtime.
     // ========================================
     public function calculateWeights(): void
     {
         // Calculate total items
         if ($this->total_containers && $this->items_per_container) {
-            $this->total_items = (float)($this->total_containers * $this->items_per_container);
+            $this->setAttribute('total_items', $this->total_containers * $this->items_per_container);
         }
 
         // Calculate total weight in KG
         if ($this->total_containers && $this->weight_per_container) {
-            $this->total_weight_kg = (float)($this->total_containers * $this->weight_per_container);
+            $this->setAttribute('total_weight_kg', $this->total_containers * $this->weight_per_container);
         } elseif ($this->total_items && $this->weight_per_item) {
-            $this->total_weight_kg = (float)($this->total_items * $this->weight_per_item);
+            $this->setAttribute('total_weight_kg', (float)$this->total_items * (float)$this->weight_per_item);
         } elseif ($this->weight_per_container && $this->items_per_container && $this->weight_per_item) {
-            $this->weight_per_container = (float)($this->items_per_container * $this->weight_per_item);
-            $this->total_weight_kg = (float)($this->total_containers * $this->weight_per_container);
+            $this->setAttribute('weight_per_container', (float)$this->items_per_container * (float)$this->weight_per_item);
+            $this->setAttribute('total_weight_kg', $this->total_containers * (float)$this->weight_per_container);
         }
 
         // Auto-convert ke TON dan KWINTAL (SINKRON OTOMATIS)
         if ($this->total_weight_kg) {
-            $this->total_weight_ton = (float)($this->total_weight_kg / 1000);
-            $this->total_weight_kwintal = (float)($this->total_weight_kg / 100);
+            $this->setAttribute('total_weight_ton', (float)$this->total_weight_kg / 1000);
+            $this->setAttribute('total_weight_kwintal', (float)$this->total_weight_kg / 100);
         }
     }
 
@@ -601,5 +605,17 @@ class Outbound extends Model
             'approver' => $this->approver?->name,
             'inbound_code' => $this->inbound?->code,
         ];
+    }
+
+    /**
+     * Configure activity log options
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['code', 'name_product', 'warehouse_from', 'purpose_type', 'department', 'status', 'total_containers', 'quantity'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn(string $eventName) => "Outbound {$eventName}: {$this->code}");
     }
 }

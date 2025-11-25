@@ -17,11 +17,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements HasAvatar
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, ManagesMediaFiles;
+    use HasFactory, Notifiable, SoftDeletes, ManagesMediaFiles, HasRoles;
 
     /**
      * Account Status Constants
@@ -866,7 +867,7 @@ class User extends Authenticatable implements HasAvatar
     {
         // If user has uploaded avatar, return the full URL
         if ($this->avatar && Storage::disk('public')->exists($this->avatar)) {
-            return Storage::disk('public')->url($this->avatar);
+            return asset('storage/' . $this->avatar);
         }
 
         // Return default avatar as fallback
